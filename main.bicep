@@ -9,6 +9,9 @@ param costCenter string = 'CC-1000'
 @description('Email address for the project manager receiving budget alerts.')
 param pmEmail string
 
+@description('First day of the next month, when the monthly budget begins.')
+param budgetStartDate string = dateTimeAdd(utcNow('yyyy-MM-01T00:00:00Z'), 'P1M')
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: 'st${uniqueString(resourceGroup().id)}'
   location: location
@@ -31,7 +34,7 @@ resource monthlyBudget 'Microsoft.Consumption/budgets@2021-10-01' = {
     category: 'Cost'
     timeGrain: 'Monthly'
     timePeriod: {
-      startDate: '2025-01-01T00:00:00Z'
+      startDate: budgetStartDate
     }
     notifications: {
       alertAt80Percent: {

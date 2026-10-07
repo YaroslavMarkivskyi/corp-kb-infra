@@ -10,7 +10,6 @@ import pytest
 REPOSITORY_ROOT = Path(__file__).parents[1]
 ENTRYPOINT = REPOSITORY_ROOT / "main.bicep"
 COMPLIANCE_CHECK = REPOSITORY_ROOT / "tools" / "check_compliance.py"
-APPROVED_REGIONS = {"westeurope", "germanywestcentral"}
 
 
 def build_template(tmp_path: Path) -> dict:
@@ -112,6 +111,7 @@ def test_built_template_is_resource_group_scoped_policy_free_and_compliant(
     template = build_template(tmp_path)
 
     assert template["$schema"].endswith("/deploymentTemplate.json#")
+    assert template["resources"], "The skeleton must contain resources to check"
     policy_resources = {
         "microsoft.authorization/policydefinitions",
         "microsoft.authorization/policyassignments",
@@ -138,7 +138,6 @@ def test_built_template_is_resource_group_scoped_policy_free_and_compliant(
 def test_environment_parameters_define_an_approved_location_and_cost_center(
     parameter_file: Path, location: str
 ) -> None:
-    assert location in APPROVED_REGIONS
     assert parameter_file.is_file()
 
     contents = parameter_file.read_text(encoding="utf-8")

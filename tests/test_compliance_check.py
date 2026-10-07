@@ -120,6 +120,10 @@ def test_built_template_is_resource_group_scoped_policy_free_and_compliant(
         resource["type"].lower() in policy_resources
         for resource in template.get("resources", [])
     )
+    assert not any(
+        resource["type"].lower() == "microsoft.storage/storageaccounts"
+        for resource in template.get("resources", [])
+    ), "The template must not create a placeholder storage account"
 
     template_path = tmp_path / "built-main.json"
     template_path.write_text(json.dumps(template), encoding="utf-8")
@@ -142,4 +146,7 @@ def test_environment_parameters_define_an_approved_location_and_cost_center(
 
     contents = parameter_file.read_text(encoding="utf-8")
     assert f"param location = '{location}'" in contents
-    assert "param costCenter = '" in contents
+    assert "param costCenter = 'CC-1000'" in contents
+    assert "param budgetAmount = 200" in contents
+    assert "param budgetStartDate = '" in contents
+    assert "utcNow" not in contents

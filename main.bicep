@@ -1,56 +1,22 @@
-targetScope = 'subscription'
+targetScope = 'resourceGroup'
 
-resource approvedRegionsPolicy 'Microsoft.Authorization/policyDefinitions@2021-06-01' = {
-  name: 'approved-regions'
-  properties: {
-    displayName: 'Allow resources only in approved regions'
-    policyType: 'Custom'
-    mode: 'Indexed'
-    policyRule: {
-      if: {
-        field: 'location'
-        notIn: [
-          'germanywestcentral'
-          'westeurope'
-        ]
-      }
-      then: {
-        effect: 'deny'
-      }
-    }
+@description('Azure region for the infrastructure resources.')
+param location string = 'westeurope'
+
+@description('Cost allocation identifier applied to every resource.')
+param costCenter string = 'CC-1000'
+
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: 'st${uniqueString(resourceGroup().id)}'
+  location: location
+  sku: {
+    name: 'Standard_LRS'
   }
-}
-
-resource costCenterPolicy 'Microsoft.Authorization/policyDefinitions@2021-06-01' = {
-  name: 'require-cost-center'
-  properties: {
-    displayName: 'Require a CostCenter tag'
-    policyType: 'Custom'
-    mode: 'Indexed'
-    policyRule: {
-      if: {
-        field: 'tags[\'CostCenter\']'
-        exists: false
-      }
-      then: {
-        effect: 'deny'
-      }
-    }
+  kind: 'StorageV2'
+  tags: {
+    CostCenter: costCenter
   }
-}
-
-resource approvedRegionsAssignment 'Microsoft.Authorization/policyAssignments@2022-06-01' = {
-  name: 'enforce-approved-regions'
   properties: {
-    displayName: 'Enforce approved regions'
-    policyDefinitionId: approvedRegionsPolicy.id
-  }
-}
-
-resource costCenterAssignment 'Microsoft.Authorization/policyAssignments@2022-06-01' = {
-  name: 'enforce-cost-center'
-  properties: {
-    displayName: 'Enforce CostCenter tag'
-    policyDefinitionId: costCenterPolicy.id
+    accessTier: 'Hot'
   }
 }

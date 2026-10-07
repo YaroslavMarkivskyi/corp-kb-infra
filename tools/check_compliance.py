@@ -9,6 +9,7 @@ from typing import Any
 
 APPROVED_REGIONS = {'westeurope', 'germanywestcentral'}
 PARAMETER_EXPRESSION = re.compile(r"^\[parameters\('([^']+)'\)\]$", re.IGNORECASE)
+RESOURCE_TYPES_WITHOUT_LOCATION_OR_TAGS = {'microsoft.consumption/budgets'}
 
 
 def resolve_parameter(value: Any, parameters: dict[str, Any]) -> Any:
@@ -28,18 +29,20 @@ def validate_resource(resource: dict[str, Any], parameters: dict[str, Any]) -> l
     """Return violations for a resource and its nested resources."""
     violations: list[str] = []
     name = resource.get('name', '<unnamed resource>')
-    location = resolve_parameter(resource.get('location'), parameters)
-    tags = resource.get('tags')
-    cost_center = (
-        resolve_parameter(tags.get('CostCenter'), parameters)
-        if isinstance(tags, dict)
-        else None
-    )
+    resource_type = resource.get('type', '').lower()
+    if resource_type not in RESOURCE_TYPES_WITHOUT_LOCATION_OR_TAGS:
+        location = resolve_parameter(resource.get('location'), parameters)
+        tags = resource.get('tags')
+        cost_center = (
+            resolve_parameter(tags.get('CostCenter'), parameters)
+            if isinstance(tags, dict)
+            else None
+        )
 
-    if not isinstance(location, str) or location.lower() not in APPROVED_REGIONS:
-        violations.append(f'{name}: location {location!r} is not approved')
-    if not cost_center:
-        violations.append(f'{name}: CostCenter tag is required')
+        if not isinstance(location, str) or location.lower() not in APPROVED_REGIONS:
+            violations.append(f'{name}: location {location!r} is not approved')
+        if not cost_center:
+            violations.append(f'{name}: CostCenter tag is required')
 
     for child in resource.get('resources', []):
         if isinstance(child, dict):

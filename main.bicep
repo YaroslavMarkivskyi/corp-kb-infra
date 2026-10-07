@@ -26,14 +26,13 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
 
 resource monthlyBudget 'Microsoft.Consumption/budgets@2021-10-01' = {
   name: 'monthly-budget'
-  location: location
-  tags: {
-    CostCenter: costCenter
-  }
   properties: {
     amount: 200
     category: 'Cost'
     timeGrain: 'Monthly'
+    timePeriod: {
+      startDate: '2025-01-01T00:00:00Z'
+    }
     notifications: {
       alertAt80Percent: {
         enabled: true

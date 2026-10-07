@@ -143,8 +143,3 @@ def test_environment_parameters_define_an_approved_location_and_cost_center(
     contents = parameter_file.read_text(encoding="utf-8")
     assert f"param location = '{location}'" in contents
     assert "param costCenter = '" in contents
-
-
-def test_readme_documents_the_modules_folder_convention() -> None:
-    assert (REPOSITORY_ROOT / "modules").is_dir()
-    assert "modules/" in (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")

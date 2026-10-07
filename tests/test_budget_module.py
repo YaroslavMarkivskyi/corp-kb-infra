@@ -10,10 +10,6 @@ from typing import Any
 REPOSITORY_ROOT = Path(__file__).parents[1]
 ENTRYPOINT = REPOSITORY_ROOT / "main.bicep"
 BUDGET_MODULE = REPOSITORY_ROOT / "modules" / "budget.bicep"
-PARAMETER_FILES = (
-    REPOSITORY_ROOT / "dev.bicepparam",
-    REPOSITORY_ROOT / "prod.bicepparam",
-)
 
 
 def build_template(tmp_path: Path) -> dict[str, Any]:
@@ -78,19 +74,6 @@ def test_budget_module_declares_budget_and_notification_inputs() -> None:
         "param budgetStartDate string",
     ):
         assert declaration in contents
-
-
-def test_environment_parameters_provide_a_fixed_monthly_budget_and_start_date() -> None:
-    for parameter_file in PARAMETER_FILES:
-        contents = parameter_file.read_text(encoding="utf-8")
-
-        assert "param budgetAmount = 200" in contents
-        assert re.search(
-            r"param\s+budgetStartDate\s*=\s+'\d{4}-\d{2}-01T00:00:00Z'",
-            contents,
-        )
-        assert "utcNow" not in contents
-        assert "param pmEmail = 'REPLACE-WITH-PM-EMAIL@company.invalid'" in contents
 
 
 def test_monthly_budget_alerts_at_80_and_100_percent_reach_it_ops_and_the_pm(

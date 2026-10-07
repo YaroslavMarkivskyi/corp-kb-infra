@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 ENTRYPOINT = REPOSITORY_ROOT / "main.bicep"
+BUDGET_MODULE = REPOSITORY_ROOT / "modules" / "budget.bicep"
 
 
 def build_template(tmp_path: Path) -> dict[str, Any]:
@@ -50,6 +52,30 @@ def deployment_resources(resources: list[dict[str, Any]]) -> Iterator[dict[str, 
         yield from deployment_resources(nested_resources)
 
 
+def test_entrypoint_composes_the_budget_module_without_an_inline_budget() -> None:
+    contents = ENTRYPOINT.read_text(encoding="utf-8")
+
+    assert BUDGET_MODULE.is_file(), "The monthly budget must live in modules/budget.bicep"
+    assert re.search(
+        r"module\s+budget\s+'\./modules/budget\.bicep'\s*=\s*{",
+        contents,
+    ), "main.bicep must compose the budget module"
+    assert "Microsoft.Consumption/budgets" not in contents
+
+
+def test_budget_module_declares_budget_and_notification_inputs() -> None:
+    assert BUDGET_MODULE.is_file(), "The monthly budget must live in modules/budget.bicep"
+    contents = BUDGET_MODULE.read_text(encoding="utf-8")
+
+    for declaration in (
+        "param budgetAmount int",
+        "param itOpsEmail string",
+        "param pmEmail string",
+        "param budgetStartDate string",
+    ):
+        assert declaration in contents
+
+
 def test_monthly_budget_alerts_at_80_and_100_percent_reach_it_ops_and_the_pm(
     tmp_path: Path,
 ) -> None:
@@ -60,10 +86,11 @@ def test_monthly_budget_alerts_at_80_and_100_percent_reach_it_ops_and_the_pm(
         if resource.get("type", "").lower() == "microsoft.consumption/budgets"
     ]
 
-    assert budgets, "Missing the Cost Management budget that defines the monthly alerts"
+    assert len(budgets) == 1, "The resource group must have one monthly Cost Management budget"
     budget = budgets[0]
     properties = budget["properties"]
 
+    assert properties["amount"] == "[parameters('budgetAmount')]"
     assert properties["timeGrain"] == "Monthly"
 
     notifications = properties["notifications"]
@@ -80,6 +107,6 @@ def test_monthly_budget_alerts_at_80_and_100_percent_reach_it_ops_and_the_pm(
         assert notification["enabled"] is True
         assert notification["operator"] == "GreaterThanOrEqualTo"
         assert set(notification["contactEmails"]) == {
-            "it-ops@company.com",
+            "[parameters('itOpsEmail')]",
             "[parameters('pmEmail')]",
         }

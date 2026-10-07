@@ -9,7 +9,10 @@ from typing import Any
 
 APPROVED_REGIONS = {'westeurope', 'germanywestcentral'}
 PARAMETER_EXPRESSION = re.compile(r"^\[parameters\('([^']+)'\)\]$", re.IGNORECASE)
-RESOURCE_TYPES_WITHOUT_LOCATION_OR_TAGS = {'microsoft.consumption/budgets'}
+RESOURCE_TYPES_WITHOUT_LOCATION_OR_TAGS = {
+    'microsoft.consumption/budgets',
+    'microsoft.resources/deployments',
+}
 
 
 def resolve_parameter(value: Any, parameters: dict[str, Any]) -> Any:

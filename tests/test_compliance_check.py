@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -71,6 +72,18 @@ def compliant_resource() -> dict:
     }
 
 
+def deployment_resources(resources: list[dict]) -> Iterator[dict]:
+    """Yield resources, including those emitted by nested module deployments."""
+    for resource in resources:
+        yield resource
+        yield from deployment_resources(resource.get("resources", []))
+
+        properties = resource.get("properties", {})
+        template = properties.get("template", {}) if isinstance(properties, dict) else {}
+        nested_resources = template.get("resources", []) if isinstance(template, dict) else []
+        yield from deployment_resources(nested_resources)
+
+
 def test_compliance_check_accepts_resources_in_approved_regions_with_cost_center(
     tmp_path: Path,
 ) -> None:
@@ -120,6 +133,10 @@ def test_built_template_is_resource_group_scoped_policy_free_and_compliant(
         resource["type"].lower() in policy_resources
         for resource in template.get("resources", [])
     )
+    assert not any(
+        resource["type"].lower() == "microsoft.storage/storageaccounts"
+        for resource in deployment_resources(template.get("resources", []))
+    ), "The template must not create a placeholder storage account"
 
     template_path = tmp_path / "built-main.json"
     template_path.write_text(json.dumps(template), encoding="utf-8")

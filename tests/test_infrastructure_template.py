@@ -6,6 +6,7 @@ from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).parents[1]
 ENTRYPOINT = REPOSITORY_ROOT / "main.bicep"
+APPROVED_REGIONS = {"westeurope", "germanywestcentral"}
 
 
 def build_template(tmp_path: Path) -> dict:
@@ -14,11 +15,24 @@ def build_template(tmp_path: Path) -> dict:
 
     output_path = tmp_path / "main.json"
     result = subprocess.run(
-        ["az", "bicep", "build", "--file", str(ENTRYPOINT), "--outfile", str(output_path)],
+        [
+            "az",
+            "bicep",
+            "build",
+            "--file",
+            str(ENTRYPOINT),
+            "--outfile",
+            str(output_path),
+            "--no-restore",
+        ],
         check=False,
         capture_output=True,
         text=True,
-        env=os.environ | {"AZURE_CONFIG_DIR": str(tmp_path / "azure-config")},
+        env=os.environ
+        | {
+            "AZURE_CONFIG_DIR": str(tmp_path / "azure-config"),
+            "DOTNET_BUNDLE_EXTRACT_BASE_DIR": str(tmp_path / "dotnet-bundle"),
+        },
     )
 
     assert result.returncode == 0, result.stderr
@@ -31,6 +45,14 @@ def policy_definitions(template: dict) -> list[dict]:
         resource
         for resource in template["resources"]
         if resource["type"].lower() == "microsoft.authorization/policydefinitions"
+    ]
+
+
+def policy_assignments(template: dict) -> list[dict]:
+    return [
+        resource
+        for resource in template["resources"]
+        if resource["type"].lower() == "microsoft.authorization/policyassignments"
     ]
 
 
@@ -57,6 +79,14 @@ def denies(policy: dict) -> bool:
     return policy["properties"]["policyRule"]["then"].get("effect") == "deny"
 
 
+def assignment_targets(policy: dict, assignments: list[dict]) -> bool:
+    policy_name = policy["name"]
+    return any(
+        policy_name in assignment["properties"].get("policyDefinitionId", "")
+        for assignment in assignments
+    )
+
+
 def test_infrastructure_skeleton_builds_to_an_arm_template(tmp_path: Path) -> None:
     template = build_template(tmp_path)
 
@@ -67,23 +97,44 @@ def test_infrastructure_skeleton_builds_to_an_arm_template(tmp_path: Path) -> No
 def test_deployment_defines_a_deny_policy_for_unapproved_regions(tmp_path: Path) -> None:
     template = build_template(tmp_path)
 
-    assert any(
-        denies(policy)
-        and has_condition(policy["properties"]["policyRule"]["if"], "location", "notIn")
+    region_policies = [
+        policy
         for policy in policy_definitions(template)
-    ), "A deny policy must reject locations outside the approved-region set"
+        if denies(policy)
+        and has_condition(
+            policy["properties"]["policyRule"]["if"],
+            "location",
+            "notIn",
+            sorted(APPROVED_REGIONS),
+        )
+    ]
+
+    assert region_policies, (
+        "A deny policy must reject locations outside exactly the approved-region set"
+    )
+    assert any(
+        assignment_targets(policy, policy_assignments(template))
+        for policy in region_policies
+    ), "An assignment must enforce the approved-region deny policy"
 
 
 def test_deployment_defines_a_deny_policy_for_missing_cost_center(tmp_path: Path) -> None:
     template = build_template(tmp_path)
 
-    assert any(
-        denies(policy)
+    cost_center_policies = [
+        policy
+        for policy in policy_definitions(template)
+        if denies(policy)
         and has_condition(
             policy["properties"]["policyRule"]["if"],
             "tags['CostCenter']",
             "exists",
             False,
         )
-        for policy in policy_definitions(template)
-    ), "A deny policy must reject resources without the CostCenter tag"
+    ]
+
+    assert cost_center_policies, "A deny policy must reject resources without the CostCenter tag"
+    assert any(
+        assignment_targets(policy, policy_assignments(template))
+        for policy in cost_center_policies
+    ), "An assignment must enforce the CostCenter deny policy"
